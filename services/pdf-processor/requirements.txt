@@ -1,0 +1,7 @@
+# Remove these lines
+# pytesseract>=0.3.10
+# opencv-python>=4.5.0
+# pillow>=9.5.0
+
+# Add HTTP client for calling OCR service
+httpx>=0.24.0  # for async HTTP calls

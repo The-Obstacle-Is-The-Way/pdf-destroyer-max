@@ -1,0 +1,58 @@
+# OCR Service Configuration
+
+[service]
+name = "ocr-tesseract"
+version = "1.1.0"
+debug = true
+
+[ocr]
+supported_languages = ["eng", "fra", "deu", "spa"]
+default_language = "eng"
+confidence_threshold = 60.0
+use_angle_cls = true  # Whether to use angle classification for better text orientation recognition
+
+[image]
+max_width = 1024
+max_height = 1024
+allowed_extensions = [".png", ".jpg", ".jpeg", ".tiff", ".bmp"]
+
+[neural]
+enable_preprocessing = true
+dift_enhancement_level = "medium"
+use_gpu_acceleration = true
+
+[models]
+dift_model_path = "models/dift_model.h5"
+layoutlmv3_path = "models/layoutlmv3"
+handwriting_model_path = "models/handwriting_model.h5"
+math_model_path = "models/math_model.h5"
+
+[api]
+prefix = "/api/v1"
+cors_origins = [
+    "http://localhost:8501",  # Streamlit frontend
+    "http://localhost:8001"   # Backend API
+]
+
+[performance]
+batch_size = 4
+processing_timeout = 30  # seconds
+max_workers = 4
+gpu_device_id = 0  # Specify GPU device to use
+
+[storage]
+temp_dir = "data/temp"
+processed_dir = "data/processed"
+failed_dir = "data/failed"
+input_dir = "data/input"
+output_dir = "data/output"
+
+[monitoring]
+enable_metrics = true
+metrics_port = 8002
+log_level = "INFO"
+log_dir = "logs"
+log_filename = "ocr_service.log"
+
+[logging]
+log_format

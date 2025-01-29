@@ -1,0 +1,276 @@
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  backend-fastapi:
+    build:
+      context: ./services/backend-fastapi
+      dockerfile: Dockerfile
+    container_name: backend-fastapi
+    env_file:
+      - .env
+    environment:
+      # Core settings
+      PYTHONPATH: /app
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      ENV_FILE: /app/config/environments/development.env
+      
+      # CUDA and GPU settings
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+      PATH: "/usr/local/cuda/bin:/usr/local/cuda-11.8/bin:$PATH"
+      
+      # Service URLs
+      AI_POWERHOUSE_URL: "http://pipelines:8005"
+      OCR_SERVICE_URL: "http://ocr-tesseract:8002"
+      SUMMARIZER_URL: "http://transformers-summarizer:8006"
+      WATCHDOG_URL: "http://watchdog-file-monitor:8007"
+      PDF_PROCESSOR_URL: "http://pdf-processor:8003"
+      STORAGE_SERVICE_URL: "http://storage-service:8004"
+      SECURITY_CENTER_URL: "http://security-center:8008"
+      EXPORT_HUB_URL: "http://export-hub:8009"
+      MONITORING_SERVICE_URL: "http://monitoring-service:8010"
+      
+      # Performance tuning
+      MAX_WORKERS: 4
+      UVICORN_WORKERS: 4
+      UVICORN_TIMEOUT: 300
+      
+      # Security settings
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY}"
+      JWT_ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      
+      # Logging
+      LOG_LEVEL: "INFO"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/backend-fastapi:/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - /tmp/fastapi_temp:/tmp/fastapi_temp
+    depends_on:
+      pipelines:
+        condition: service_healthy
+      ocr-tesseract:
+        condition: service_healthy
+      pdf-processor:
+        condition: service_healthy
+      transformers-summarizer:
+        condition: service_healthy
+      watchdog-file-monitor:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: |
+        curl -f http://localhost:8001/health &&
+        curl -f http://localhost:8001/api/ready
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    runtime: nvidia
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pipelines:
+    build:
+      context: ./services/ai-powerhouse-pipelines
+      dockerfile: Dockerfile
+    container_name: pipelines
+    command: ["python3.10", "main.py"]
+    environment:
+      ACCELERATE_CONFIG_FILE: /app/accelerate_config/local.yaml
+      CUDA_VISIBLE_DEVICES: "0"
+      ENV_FILE: /app/config/environments/development.env
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+      PATH: "/usr/local/cuda/bin:/usr/local/cuda-11.8/bin:$PATH"
+      PYTHONPATH: /app
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./services/ai-powerhouse-pipelines:/app
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 8G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    runtime: nvidia
+    networks:
+      - app-network
+
+  ocr-tesseract:
+    build:
+      context: ./services/neural-ocr-tesseract
+      dockerfile: Dockerfile
+    container_name: ocr-tesseract
+    environment:
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/4.00/tessdata/
+      ENV_FILE: /app/config/environments/development.env
+      CUDA_VISIBLE_DEVICES: "0"
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+      PATH: "/usr/local/cuda/bin:/usr/local/cuda-11.8/bin:$PATH"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/neural-ocr-tesseract:/app
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 1m
+      timeout: 30s
+      retries: 5
+    runtime: nvidia
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 2G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - app-network
+
+  pdf-processor:
+    build:
+      context: ./services/pdf-processor
+      dockerfile: Dockerfile
+    container_name: pdf-processor
+    environment:
+      PDF_PROCESSOR_CONFIG: /app/config/settings.yaml
+      ENV_FILE: /app/config/environments/development.env
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/pdf-processor:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      ocr-tesseract:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+
+  frontend-streamlit:
+    build:
+      context: ./services/frontend-streamlit
+      dockerfile: Dockerfile
+    container_name: frontend-streamlit
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      ENV_FILE: /app/config/environments/development.env
+    ports:
+      - "8501:8501"
+    depends_on:
+      backend-fastapi:
+        condition: service_healthy
+    volumes:
+      - ./services/frontend-streamlit:/app
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
+
+  transformers-summarizer:
+    build:
+      context: ./services/transformers-summarizer
+      dockerfile: Dockerfile
+    container_name: transformers-summarizer
+    environment:
+      CUDA_VISIBLE_DEVICES: "0"
+      PYTHONPATH: /app
+      ENV_FILE: /app/config/environments/development.env
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+      PATH: "/usr/local/cuda/bin:/usr/local/cuda-11.8/bin:$PATH"
+      TRANSFORMERS_MODEL: "microsoft/layoutlmv3-base"
+      USE_GPU: "true"
+    ports:
+      - "8006:8006"
+    volumes:
+      - ./services/transformers-summarizer:/app
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    runtime: nvidia
+    networks:
+      - app-network
+
+  watchdog-file-monitor:
+    build:
+      context: ./services/watchdog-file-monitor
+      dockerfile: Dockerfile
+    container_name: watchdog-file-monitor
+    environment:
+      WATCH_DIRECTORY: /app/data/input
+      PROCESSED_DIRECTORY: /app/data/output
+      PYTHONPATH: /app
+      ENV_FILE: /app/config/environments/development.env
+      LD_LIBRARY_PATH: "/usr/local/cuda/lib64:/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH"
+      PATH: "/usr/local/cuda/bin:/usr/local/cuda-11.8/bin:$PATH"
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./services/watchdog-file-monitor:/app
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network

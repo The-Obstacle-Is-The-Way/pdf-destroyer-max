@@ -1,0 +1,13 @@
+# Development Tools
+flake8>=6.1.0      # Code linting
+black>=23.7.0       # Code formatting
+pytest>=7.4.0       # Testing framework
+pytest-cov>=4.1.0   # Test coverage
+isort>=5.12.0       # Import sorting
+
+# Deployment Tools
+docker-compose>=1.29.0
+
+# Shared Utilities
+requests>=2.31.0     # HTTP requests library
+PyYAML>=6.0.2        # YAML parsing

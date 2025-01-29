@@ -1,0 +1,12 @@
+# Core Watchdog dependency
+watchdog==2.1.6  # File monitoring library
+
+# Additional system utilities (if required)
+PyYAML==6.0.2  # For YAML-based configurations
+cryptography==3.4.8  # For encrypted file handling (if needed)
+requests==2.32.3  # For interacting with external APIs
+schedule==1.2.0  # For task scheduling based on file events
+
+# Logging and monitoring
+loguru==0.6.0  # Advanced logging for runtime debugging
+

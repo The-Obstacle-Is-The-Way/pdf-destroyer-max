@@ -1,0 +1,31 @@
+neural_merger:
+  model_name: "microsoft/layoutlmv3-base"
+  max_length: 512
+  batch_size: 16
+  use_gpu: true
+  precision: "fp16"
+  cache_dir: "/app/data/models/neural_merger"
+
+quality_scoring:
+  thresholds:
+    clarity: 0.8
+    completeness: 0.85
+    consistency: 0.75
+  metrics:
+    - clarity
+    - completeness
+    - consistency
+  cache_dir: "/app/data/models/quality_scoring"
+
+document_qa:
+  model_name: "deepset/roberta-base-squad2"
+  max_length: 384
+  doc_stride: 128
+  batch_size: 8
+  cache_dir: "/app/data/models/document_qa"
+
+layout_genius:
+  model_name: "microsoft/layoutlmv3-base"
+  max_length: 512
+  batch_size: 16
+  cache_dir: "/app/data/models/layout_genius"

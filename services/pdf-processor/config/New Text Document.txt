@@ -1,0 +1,89 @@
+from pathlib import Path
+from typing import Dict, Any
+import os
+from pydantic import BaseSettings, Field
+from functools import lru_cache
+
+# Import project-wide settings
+import sys
+sys.path.append(str(Path(__file__).parent.parent.parent.parent))
+from config.settings import settings as project_settings
+
+class PDFProcessorSettings(BaseSettings):
+    """PDF Processor service specific settings."""
+    
+    # Service configuration
+    service_name: str = "pdf-processor"
+    host: str = Field(default="0.0.0.0", env="PDF_PROCESSOR_HOST")
+    port: int = Field(default=8003, env="PDF_PROCESSOR_PORT")
+    
+    # Processing settings
+    max_file_size: int = Field(default=100 * 1024 * 1024)  # 100MB
+    chunk_size: int = Field(default=1000)
+    batch_size: int = Field(default=10)
+    processing_timeout: int = Field(default=300)
+    
+    # OCR settings
+    enable_ocr: bool = True
+    ocr_confidence_threshold: float = 0.8
+    tesseract_language: str = "eng"
+    
+    # PDF extraction settings
+    min_text_length: int = 50
+    extract_images: bool = True
+    image_quality: int = Field(default=300)  # DPI for image extraction
+    
+    # Storage paths
+    base_dir: Path = Path(__file__).parent.parent
+    data_dir: Path = base_dir / "data"
+    upload_dir: Path = data_dir / "uploads"
+    processed_dir: Path = data_dir / "processed"
+    failed_dir: Path = data_dir / "failed"
+    temp_dir: Path = data_dir / "temp"
+    
+    # Cache settings
+    enable_cache: bool = True
+    cache_ttl: int = 3600  # 1 hour
+    
+    # External services
+    ocr_service_url: str = Field(
+        default="http://ocr-tesseract:8004",
+        env="OCR_URL"
+    )
+    summarizer_service_url: str = Field(
+        default="http://transformers-summarizer:8005",
+        env="SUMMARIZER_URL"
+    )
+    
+    class Config:
+        env_file = project_settings.base_dir / "config" / "environments" / f"{os.getenv('ENVIRONMENT', 'development')}.env"
+        env_file_encoding = 'utf-8'
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._create_directories()
+        self._load_project_settings()
+
+    def _create_directories(self):
+        """Ensure all required directories exist."""
+        for path in [self.data_dir, self.upload_dir, self.processed_dir,
+                    self.failed_dir, self.temp_dir]:
+            path.mkdir(parents=True, exist_ok=True)
+
+    def _load_project_settings(self):
+        """Load and merge project-wide settings."""
+        pdf_settings = project_settings.pdf_processor_settings
+        
+        # Update processing settings from project config
+        self.max_file_size = pdf_settings['processing']['max_file_size']
+        self.chunk_size = pdf_settings['processing']['chunk_size']
+        self.batch_size = pdf_settings['processing']['batch_size']
+        self.processing_timeout = pdf_settings['processing']['timeout']
+
+@lru_cache()
+def get_settings() -> PDFProcessorSettings:
+    """Creates cached instance of settings."""
+    return PDFProcessorSettings()
+
+# Create global instance
+settings = get_settings()
